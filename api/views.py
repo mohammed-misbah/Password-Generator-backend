@@ -5,55 +5,43 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import GeneratePassword
-from .serializers import PasswordSerializer
 from rest_framework.decorators import api_view
+from django.http import JsonResponse
 
-class PasswordGenerate(APIView):
-    serializer_class = PasswordSerializer
-    def post(self, request):
-        data = request.data
-        username = data.get('username')
-        password_length = int(data.get('password_length', 8))
-        include_uppercase = data.get('uppercase', True)
-        include_lowercase = data.get('lowercase', True)
-        include_numbers = data.get('numbers', True)
-        special_characters = data.get('special_characters', True)
+def generate_random_password(length=8, include_uppercase=True, include_lowercase=True, include_numbers=True, include_special_chars=True):
+    characters = ''
+    if include_uppercase:
+        characters += string.ascii_uppercase
+    if include_lowercase:
+        characters += string.ascii_lowercase
+    if include_numbers:
+        characters += string.digits
+    if include_special_chars:
+        characters += string.punctuation
+    return ''.join(random.choice(characters) for _ in range(length))
 
-        characters = ''
-        if include_uppercase:
-            characters += string.ascii_uppercase
-        if include_lowercase:
-            characters += string.ascii_lowercase
-        if include_numbers:
-            characters += string.digits
-        if special_characters:
-            characters += string.punctuation
 
-        if not characters:
-            return Response({'error': "No character type selected"}, status=status.HTTP_400_BAD_REQUEST)
+@api_view(['GET', 'POST'])
+def save_password(request):
+    generated_password = generate_random_password()
+    obj = GeneratePassword.objects.create(password=generated_password)
+    print("New object created with ID:", obj.id)
+    return JsonResponse({'msg': 'Password saved successfully', 'password': generated_password, 'id': obj.id}, status=201)
 
-        password = ''.join(random.choice(characters) for _ in range(password_length))
-        password_data = {
-            'username': username,
-            'password': password
-        }
-
-        if GeneratePassword.objects.filter(username=username).exists():
-            GeneratePassword.objects.filter(username=username).update(password=password)
-            return Response({"status": "Password updated", "password": password}, status=status.HTTP_200_OK)
-        else:
-            serializer = self.serializer_class(data=password_data)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            else:
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordListView(APIView):
-    def get(self,request):
+    def get(self, request):
         passwords = GeneratePassword.objects.all()
-        serializer = PasswordSerializer(passwords, many=True)
-        return Response(serializer.data)
+        password_list = []
+        print("list of password is", passwords)
+        for password in passwords:
+            password_data = {
+                'id': password.id,
+                'password': password.password,
+            }
+            password_list.append(password_data)
+
+        return Response(password_list)
     
 
 class PasswordDeleteView(APIView):
